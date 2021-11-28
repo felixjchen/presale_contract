@@ -27,3 +27,42 @@ describe("FelixToken", () => {
     );
   });
 });
+
+describe("PresaleContract", () => {
+  const deployContracts = async () => {
+    const presaleContractFactory = await ethers.getContractFactory(
+      "PresaleContract"
+    );
+    const presaleContract = await presaleContractFactory.deploy(2);
+    await presaleContract.deployed();
+
+    const FelixToken = await ethers.getContractFactory("FelixToken");
+    const FOK = await FelixToken.deploy();
+    await FOK.deployed();
+
+    return { FOK, presaleContract };
+  };
+
+  it("should let me add a presale", async () => {
+    const { presaleContract, FOK } = await deployContracts();
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [20];
+    const amounts = [0];
+    const tokenAddresses = [FOK.address];
+
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+
+    const presale = await presaleContract.getPresale(0);
+
+    console.log(presale);
+    console.log(presale.start);
+  });
+});
