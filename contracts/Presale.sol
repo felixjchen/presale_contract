@@ -9,10 +9,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 struct Presale {
   uint256 start;
   uint256 end;
-  // price of eth per ERC20
+  bool alive;
+  // price of eth per ERC20, this is a ratio
   uint256 price;
-  uint256 amount;
-  IERC20 token_address;
+  uint256 amountMantissa;
+  uint256 soldMantissa;
+  IERC20 tokenAddress;
 }
 
 contract PresaleContract is Ownable {
@@ -41,29 +43,52 @@ contract PresaleContract is Ownable {
     uint256[] memory ends,
     uint256[] memory prices,
     uint256[] memory amounts,
-    IERC20[] memory token_addresses
+    IERC20[] memory tokenAddresses
   ) public {
     require(
       starts.length == ends.length &&
         starts.length == prices.length &&
         starts.length == amounts.length &&
-        starts.length == token_addresses.length,
+        starts.length == tokenAddresses.length,
       "length mismatch"
     );
 
     for (uint256 i = 0; i < starts.length; i++) {
       // Get tokens first
-      token_addresses[i].transferFrom(msg.sender, address(this), amounts[i]);
+
+      // TODO: What happens when this transferFrom fails on an interation?
+      tokenAddresses[i].transferFrom(msg.sender, address(this), amounts[i]);
+
       // Register presale
       Presale memory p = Presale(
         starts[i],
         ends[i],
+        true,
         prices[i],
         amounts[i],
-        token_addresses[i]
+        0,
+        tokenAddresses[i]
       );
       uint256 presaleID = getNextPresaleID();
       presales[presaleID] = p;
     }
+  }
+
+  function buy(uint256 presaleID, uint256 amountMantissa) public payable {
+    Presale memory p = presales[presaleID];
+    require(p.alive, "presale ended");
+    require(block.timestamp > p.start, "presale not started");
+    uint256 availableMantissa = p.amountMantissa - p.soldMantissa;
+    require(availableMantissa >= amountMantissa, "not enough tokens");
+    uint256 totalPriceMantissa = amountMantissa * p.price;
+    require(msg.value >= totalPriceMantissa, "not enough ETH");
+
+    // assume we have enough ERC20 to send to client
+    // assume client has enough ETH to pay
+    // assume presale is alive
+
+    // TODO: What happens if client sends too much ETH ?
+    p.soldMantissa += amountMantissa;
+    p.tokenAddress.transfer(msg.sender, amountMantissa);
   }
 }
