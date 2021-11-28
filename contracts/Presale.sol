@@ -1,5 +1,6 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
+pragma abicoder v2;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -20,6 +21,7 @@ struct Presale {
 
 contract PresaleContract is Ownable {
   uint256 private feeBasisPoints;
+  uint256 private feeManitssa;
 
   using Counters for Counters.Counter;
   Counters.Counter private nextPresaleID;
@@ -104,6 +106,10 @@ contract PresaleContract is Ownable {
     p.tokenAddress.transfer(msg.sender, availableMantissa);
   }
 
+  function changeFee(uint256 newFewBasisPoints) public onlyOwner {
+    feeBasisPoints = newFewBasisPoints;
+  }
+
   function endPresale(uint256 presaleID) public {
     Presale memory p = getPresale(presaleID);
 
@@ -112,5 +118,11 @@ contract PresaleContract is Ownable {
 
     p.tokenAddress.transferFrom(p.userAddress, address(this), p.soldMantissa);
     p.alive = false;
+
+    uint256 totalETHMantissa = p.price * p.soldMantissa;
+    uint256 fee = (totalETHMantissa * feeBasisPoints) / 10000;
+    feeManitssa += fee;
+
+    uint256 liquidETH = totalETHMantissa - fee;
   }
 }
