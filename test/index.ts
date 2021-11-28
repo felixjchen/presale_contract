@@ -1,19 +1,29 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+describe("FelixToken", () => {
+  it("should have an intial balance of 0", async () => {
+    const FelixToken = await ethers.getContractFactory("FelixToken");
+    const FOK = await FelixToken.deploy();
+    await FOK.deployed();
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+    const [owner] = await ethers.getSigners();
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
+    const ownerBalance = await FOK.balanceOf(owner.address);
+    expect(ownerBalance).to.equal(0);
+  });
 
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
+  it("should allow user to mint themself tokens", async () => {
+    const FelixToken = await ethers.getContractFactory("FelixToken");
+    const FOK = await FelixToken.deploy();
+    await FOK.deployed();
 
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
+    const [owner] = await ethers.getSigners();
+
+    expect(await FOK.balanceOf(owner.address)).to.equal(0);
+    FOK.mint(ethers.utils.parseEther("10012"));
+    expect(await FOK.balanceOf(owner.address)).to.equal(
+      ethers.utils.parseEther("10012")
+    );
   });
 });
