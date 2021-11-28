@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 struct Presale {
+  address userAddress;
   uint256 start;
   uint256 end;
   bool alive;
@@ -61,6 +62,7 @@ contract PresaleContract is Ownable {
 
       // Register presale
       Presale memory p = Presale(
+        msg.sender,
         starts[i],
         ends[i],
         true,
@@ -75,7 +77,7 @@ contract PresaleContract is Ownable {
   }
 
   function buy(uint256 presaleID, uint256 amountMantissa) public payable {
-    Presale memory p = presales[presaleID];
+    Presale memory p = getPresale(presaleID);
     require(p.alive, "presale ended");
     require(block.timestamp > p.start, "presale not started");
     uint256 availableMantissa = p.amountMantissa - p.soldMantissa;
@@ -90,5 +92,25 @@ contract PresaleContract is Ownable {
     // TODO: What happens if client sends too much ETH ?
     p.soldMantissa += amountMantissa;
     p.tokenAddress.transfer(msg.sender, amountMantissa);
+  }
+
+  function withdraw(uint256 presaleID) public {
+    Presale memory p = getPresale(presaleID);
+
+    require(p.userAddress == msg.sender, "not presale owner");
+    require(!p.alive, "presale alive");
+
+    uint256 availableMantissa = (p.amountMantissa - p.soldMantissa);
+    p.tokenAddress.transfer(msg.sender, availableMantissa);
+  }
+
+  function endPresale(uint256 presaleID) public {
+    Presale memory p = getPresale(presaleID);
+
+    require(p.alive, "presale not alive");
+    require(block.timestamp > p.end, "presale not ended");
+
+    p.tokenAddress.transferFrom(p.userAddress, address(this), p.soldMantissa);
+    p.alive = false;
   }
 }

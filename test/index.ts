@@ -45,6 +45,7 @@ describe("PresaleContract", () => {
 
   it("should let me add a presale", async () => {
     const { presaleContract, FOK } = await deployContracts();
+    const [owner] = await ethers.getSigners();
 
     FOK.mint(ethers.utils.parseEther("24"));
     FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
@@ -63,6 +64,7 @@ describe("PresaleContract", () => {
     );
 
     const presale = await presaleContract.getPresale(0);
+    expect(presale.userAddress).to.equal(owner.address);
     expect(presale.start).to.equal(0);
     expect(presale.end).to.equal(1);
     expect(presale.alive).to.equal(true);
@@ -74,6 +76,7 @@ describe("PresaleContract", () => {
 
   it("should let me add a few presales", async () => {
     const { presaleContract, FOK } = await deployContracts();
+    const [owner] = await ethers.getSigners();
 
     FOK.mint(ethers.utils.parseEther("24"));
     FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
@@ -98,6 +101,7 @@ describe("PresaleContract", () => {
     );
 
     const presale0 = await presaleContract.getPresale(0);
+    expect(presale0.userAddress).to.equal(owner.address);
     expect(presale0.start).to.equal(0);
     expect(presale0.end).to.equal(1);
     expect(presale0.alive).to.equal(true);
@@ -107,6 +111,7 @@ describe("PresaleContract", () => {
     expect(presale0.tokenAddress).to.equal(FOK.address);
 
     const presale1 = await presaleContract.getPresale(1);
+    expect(presale1.userAddress).to.equal(owner.address);
     expect(presale1.start).to.equal(100);
     expect(presale1.end).to.equal(101);
     expect(presale1.alive).to.equal(true);
