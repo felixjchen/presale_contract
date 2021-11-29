@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "./MockRouterInterface.sol";
 
 struct Presale {
   address userAddress;
@@ -22,8 +23,7 @@ struct Presale {
 }
 
 contract PresaleContract is Ownable {
-  IUniswapV2Router02 router =
-    IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+  MockRouterInterface router;
 
   uint256 private feeBasisPoints;
 
@@ -31,8 +31,9 @@ contract PresaleContract is Ownable {
   Counters.Counter private nextPresaleID;
   mapping(uint256 => Presale) private presales;
 
-  constructor(uint256 _feeBasisPoints) {
+  constructor(uint256 _feeBasisPoints, address routerAddress) {
     feeBasisPoints = _feeBasisPoints;
+    router = MockRouterInterface(routerAddress);
   }
 
   function getNextPresaleID() private returns (uint256) {
@@ -93,7 +94,7 @@ contract PresaleContract is Ownable {
     // assume client has enough ETH to pay
     // assume presale is alive
 
-    p.soldMantissa += amountMantissa;
+    presales[presaleID].soldMantissa += amountMantissa;
     p.token.transfer(msg.sender, amountMantissa);
   }
 
@@ -112,25 +113,29 @@ contract PresaleContract is Ownable {
 
     require(p.alive, "presale not alive");
     require(block.timestamp > p.end, "presale not ended");
+    presales[presaleID].alive = false;
 
-    p.token.transferFrom(p.userAddress, address(this), p.soldMantissa);
-    p.alive = false;
+    // Create liquitity if we actually sold anything
+    if (p.soldMantissa > 0) {
+      p.token.transferFrom(p.userAddress, address(this), p.soldMantissa);
+      uint256 totalETHMantissa = p.price * p.soldMantissa;
+      uint256 fee = (totalETHMantissa * feeBasisPoints) / 10000;
 
-    uint256 totalETHMantissa = p.price * p.soldMantissa;
-    uint256 fee = (totalETHMantissa * feeBasisPoints) / 10000;
+      uint256 liquitiyETH = totalETHMantissa - fee;
 
-    uint256 liquitiyETH = totalETHMantissa - fee;
-    router.addLiquidityETH{ value: liquitiyETH }(
-      p.tokenAddress,
-      p.soldMantissa,
-      p.soldMantissa,
-      liquitiyETH,
-      p.userAddress,
-      block.timestamp + 60 * 60
-    );
+      p.token.approve(address(router), p.soldMantissa);
+      router.addLiquidityETH{ value: liquitiyETH }(
+        p.tokenAddress,
+        p.soldMantissa,
+        p.soldMantissa,
+        liquitiyETH,
+        p.userAddress,
+        block.timestamp + 60 * 60
+      );
 
-    (bool sent, bytes memory data) = owner().call{ value: fee }("");
-    require(sent, "Failed to send Ether");
+      (bool sent, bytes memory data) = owner().call{ value: fee }("");
+      require(sent, "Failed to send Ether");
+    }
   }
 
   function changeFee(uint256 newFewBasisPoints) public onlyOwner {

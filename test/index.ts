@@ -30,17 +30,28 @@ describe("FelixToken", () => {
 
 describe("PresaleContract", () => {
   const deployContracts = async () => {
+    const MockLPTokenFactory = await ethers.getContractFactory("MockLPToken");
+    const MLP = await MockLPTokenFactory.deploy();
+    await MLP.deployed();
+
+    const MockRouterFactory = await ethers.getContractFactory("MockRouter");
+    const mockRouter = await MockRouterFactory.deploy(MLP.address);
+    await mockRouter.deployed();
+
+    const FelixTokenFactory = await ethers.getContractFactory("FelixToken");
+    const FOK = await FelixTokenFactory.deploy();
+    await FOK.deployed();
+
     const presaleContractFactory = await ethers.getContractFactory(
       "PresaleContract"
     );
-    const presaleContract = await presaleContractFactory.deploy(2);
+    const presaleContract = await presaleContractFactory.deploy(
+      200,
+      mockRouter.address
+    );
     await presaleContract.deployed();
 
-    const FelixToken = await ethers.getContractFactory("FelixToken");
-    const FOK = await FelixToken.deploy();
-    await FOK.deployed();
-
-    return { FOK, presaleContract };
+    return { FOK, presaleContract, MLP, mockRouter };
   };
 
   it("should let me add a presale", async () => {
@@ -295,5 +306,94 @@ describe("PresaleContract", () => {
     ).to.be.revertedWith("not enough ETH");
   });
 
-  // can mock uniswap
+  it("should let anyone end presale with no sales", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.mint(ethers.utils.parseEther("24"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await presaleContract.connect(addr1).endPresale(0);
+
+    const presale = await presaleContract.getPresale(0);
+    expect(presale.alive).to.be.equal(false);
+
+    expect(await MLP.balanceOf(addr1.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(addr1.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(owner.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(owner.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("24")
+    );
+  });
+
+  it("should let anyone end presale with some sales", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.mint(ethers.utils.parseEther("25"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("25"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await presaleContract.connect(addr1).buy(0, ethers.utils.parseEther("1"), {
+      value: ethers.utils.parseEther("2"),
+    });
+    await presaleContract.endPresale(0);
+
+    const presale = await presaleContract.getPresale(0);
+    expect(presale.alive).to.be.equal(false);
+
+    expect(await MLP.balanceOf(addr1.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(addr1.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
+
+    expect(
+      await MLP.balanceOf(owner.address),
+      "owner should have some LP"
+    ).to.be.equal(ethers.utils.parseEther("1"));
+    expect(await FOK.balanceOf(owner.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("23")
+    );
+    expect(await provider.getBalance(presaleContract.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(mockRouter.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(mockRouter.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
+    expect(await provider.getBalance(mockRouter.address)).to.be.equal(
+      ethers.utils.parseEther("1.96")
+    );
+  });
 });
