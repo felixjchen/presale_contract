@@ -1,11 +1,12 @@
 //SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.0;
-pragma abicoder v2;
+pragma solidity ^0.8.4;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
 struct Presale {
   address userAddress;
@@ -16,12 +17,15 @@ struct Presale {
   uint256 price;
   uint256 amountMantissa;
   uint256 soldMantissa;
-  IERC20 tokenAddress;
+  address tokenAddress;
+  IERC20 token;
 }
 
 contract PresaleContract is Ownable {
+  IUniswapV2Router02 router =
+    IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+
   uint256 private feeBasisPoints;
-  uint256 private feeManitssa;
 
   using Counters for Counters.Counter;
   Counters.Counter private nextPresaleID;
@@ -37,16 +41,12 @@ contract PresaleContract is Ownable {
     return presaleID;
   }
 
-  function getPresale(uint256 presaleID) public view returns (Presale memory) {
-    return presales[presaleID];
-  }
-
   function startPresale(
     uint256[] memory starts,
     uint256[] memory ends,
     uint256[] memory prices,
     uint256[] memory amounts,
-    IERC20[] memory tokenAddresses
+    address[] memory tokenAddresses
   ) public {
     require(
       starts.length == ends.length &&
@@ -57,12 +57,6 @@ contract PresaleContract is Ownable {
     );
 
     for (uint256 i = 0; i < starts.length; i++) {
-      // Get tokens first
-
-      // TODO: What happens when this transferFrom fails on an interation?
-      // SAFE ERC 20
-      tokenAddresses[i].transferFrom(msg.sender, address(this), amounts[i]);
-
       // Register presale
       Presale memory p = Presale(
         msg.sender,
@@ -72,11 +66,18 @@ contract PresaleContract is Ownable {
         prices[i],
         amounts[i],
         0,
-        tokenAddresses[i]
+        tokenAddresses[i],
+        IERC20(tokenAddresses[i])
       );
       uint256 presaleID = getNextPresaleID();
       presales[presaleID] = p;
+
+      p.token.transferFrom(msg.sender, address(this), amounts[i]);
     }
+  }
+
+  function getPresale(uint256 presaleID) public view returns (Presale memory) {
+    return presales[presaleID];
   }
 
   function buy(uint256 presaleID, uint256 amountMantissa) public payable {
@@ -92,9 +93,8 @@ contract PresaleContract is Ownable {
     // assume client has enough ETH to pay
     // assume presale is alive
 
-    // TODO: What happens if client sends too much ETH ?
     p.soldMantissa += amountMantissa;
-    p.tokenAddress.transfer(msg.sender, amountMantissa);
+    p.token.transfer(msg.sender, amountMantissa);
   }
 
   function withdraw(uint256 presaleID) public {
@@ -104,11 +104,7 @@ contract PresaleContract is Ownable {
     require(!p.alive, "presale alive");
 
     uint256 availableMantissa = (p.amountMantissa - p.soldMantissa);
-    p.tokenAddress.transfer(msg.sender, availableMantissa);
-  }
-
-  function changeFee(uint256 newFewBasisPoints) public onlyOwner {
-    feeBasisPoints = newFewBasisPoints;
+    p.token.transfer(msg.sender, availableMantissa);
   }
 
   function endPresale(uint256 presaleID) public {
@@ -117,13 +113,27 @@ contract PresaleContract is Ownable {
     require(p.alive, "presale not alive");
     require(block.timestamp > p.end, "presale not ended");
 
-    p.tokenAddress.transferFrom(p.userAddress, address(this), p.soldMantissa);
+    p.token.transferFrom(p.userAddress, address(this), p.soldMantissa);
     p.alive = false;
 
     uint256 totalETHMantissa = p.price * p.soldMantissa;
     uint256 fee = (totalETHMantissa * feeBasisPoints) / 10000;
-    feeManitssa += fee;
 
-    uint256 liquidETH = totalETHMantissa - fee;
+    uint256 liquitiyETH = totalETHMantissa - fee;
+    router.addLiquidityETH{ value: liquitiyETH }(
+      p.tokenAddress,
+      p.soldMantissa,
+      p.soldMantissa,
+      liquitiyETH,
+      p.userAddress,
+      block.timestamp + 60 * 60
+    );
+
+    (bool sent, bytes memory data) = owner().call{ value: fee }("");
+    require(sent, "Failed to send Ether");
+  }
+
+  function changeFee(uint256 newFewBasisPoints) public onlyOwner {
+    feeBasisPoints = newFewBasisPoints;
   }
 }

@@ -72,6 +72,9 @@ describe("PresaleContract", () => {
     expect(presale.amountMantissa).to.equal(ethers.utils.parseEther("24"));
     expect(presale.soldMantissa).to.equal(ethers.utils.parseEther("0"));
     expect(presale.tokenAddress).to.equal(FOK.address);
+
+    const balance = await FOK.balanceOf(owner.address);
+    expect(balance).to.equal(ethers.utils.parseEther("0"));
   });
 
   it("should let me add a few presales", async () => {
@@ -119,9 +122,45 @@ describe("PresaleContract", () => {
     expect(presale1.amountMantissa).to.equal(ethers.utils.parseEther("20"));
     expect(presale1.soldMantissa).to.equal(ethers.utils.parseEther("0"));
     expect(presale1.tokenAddress).to.equal(FOK.address);
+
+    const balance = await FOK.balanceOf(owner.address);
+    expect(balance).to.equal(ethers.utils.parseEther("0"));
   });
 
-  it("shouldn't let me add a presale without proper amount", async () => {
+  it("should have atomic startPresale (all or nothing)", async () => {
+    const { presaleContract, FOK } = await deployContracts();
+    const [owner] = await ethers.getSigners();
+
+    FOK.mint(ethers.utils.parseEther("24"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
+
+    const starts = [0, 100];
+    const ends = [1, 101];
+    const prices = [
+      ethers.utils.parseEther("2"),
+      ethers.utils.parseEther("200"),
+    ];
+    const amounts = [
+      ethers.utils.parseEther("12"),
+      ethers.utils.parseEther("13"),
+    ];
+    const tokenAddresses = [FOK.address, FOK.address];
+
+    await expect(
+      presaleContract.startPresale(
+        starts,
+        ends,
+        prices,
+        amounts,
+        tokenAddresses
+      )
+    ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
+
+    const balance = await FOK.balanceOf(owner.address);
+    await expect(balance).to.equal(ethers.utils.parseEther("24"));
+  });
+
+  it("shouldn't let me add a presale without proper amount approved", async () => {
     const { presaleContract, FOK } = await deployContracts();
 
     const starts = [0];
@@ -255,4 +294,6 @@ describe("PresaleContract", () => {
       })
     ).to.be.revertedWith("not enough ETH");
   });
+
+  // can mock uniswap
 });
