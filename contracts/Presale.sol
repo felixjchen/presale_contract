@@ -60,6 +60,7 @@ contract PresaleContract is Ownable {
       // Get tokens first
 
       // TODO: What happens when this transferFrom fails on an interation?
+      // SAFE ERC 20
       tokenAddresses[i].transferFrom(msg.sender, address(this), amounts[i]);
 
       // Register presale

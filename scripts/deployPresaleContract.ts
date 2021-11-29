@@ -20,11 +20,6 @@ async function main() {
   const presaleContract = await presaleContractFactory.deploy(2);
   await presaleContract.deployed();
 
-  const FelixToken = await ethers.getContractFactory("FelixToken");
-  const FOK = await FelixToken.deploy();
-  await FOK.deployed();
-
-  console.log("FOK deployed to:", FOK.address);
   console.log("presaleContract deployed to:", presaleContract.address);
 }
 
