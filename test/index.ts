@@ -379,10 +379,12 @@ describe("PresaleContract", () => {
     expect(
       await MLP.balanceOf(owner.address),
       "owner should have some LP"
-    ).to.be.equal(ethers.utils.parseEther("1"));
+    ).to.be.equal(0);
     expect(await FOK.balanceOf(owner.address)).to.be.equal(0);
 
-    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(0);
+    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
     expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
       ethers.utils.parseEther("23")
     );
@@ -518,7 +520,6 @@ describe("PresaleContract", () => {
     const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
     const [owner, addr1, addr2] = await ethers.getSigners();
     const provider = ethers.provider;
-
     FOK.connect(addr1).mint(ethers.utils.parseEther("24"));
     FOK.connect(addr1).approve(
       presaleContract.address,
@@ -600,10 +601,12 @@ describe("PresaleContract", () => {
     expect(
       await MLP.balanceOf(owner.address),
       "owner should have some LP"
-    ).to.be.equal(ethers.utils.parseEther("1"));
+    ).to.be.equal(0);
     expect(await FOK.balanceOf(owner.address)).to.be.equal(0);
 
-    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(0);
+    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
     expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
       ethers.utils.parseEther("23")
     );

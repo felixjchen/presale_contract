@@ -17,7 +17,11 @@ async function main() {
   const presaleContractFactory = await ethers.getContractFactory(
     "PresaleContract"
   );
-  const presaleContract = await presaleContractFactory.deploy(2);
+  const presaleContract = await presaleContractFactory.deploy(
+    200,
+    // real ropsten uniswap address
+    "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+  );
   await presaleContract.deployed();
 
   console.log("presaleContract deployed to:", presaleContract.address);

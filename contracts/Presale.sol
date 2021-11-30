@@ -9,19 +9,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./MockRouterInterface.sol";
 
-struct Presale {
-  address userAddress;
-  uint256 start;
-  uint256 end;
-  bool alive;
-  // price of eth per ERC20, this is a ratio
-  uint256 price;
-  uint256 amountMantissa;
-  uint256 soldMantissa;
-  address tokenAddress;
-  IERC20 token;
-}
-
 contract PresaleContract is Ownable {
   MockRouterInterface router;
 
@@ -29,7 +16,21 @@ contract PresaleContract is Ownable {
 
   using Counters for Counters.Counter;
   Counters.Counter private nextPresaleID;
+
   mapping(uint256 => Presale) private presales;
+
+  struct Presale {
+    address userAddress;
+    uint256 start;
+    uint256 end;
+    uint256 price;
+    uint256 amountMantissa;
+    uint256 soldMantissa;
+    bool alive;
+    // price of eth per ERC20, this is a ratio
+    address tokenAddress;
+    IERC20 token;
+  }
 
   constructor(uint256 _feeBasisPoints, address routerAddress) {
     feeBasisPoints = _feeBasisPoints;
@@ -63,10 +64,10 @@ contract PresaleContract is Ownable {
         msg.sender,
         starts[i],
         ends[i],
-        true,
         prices[i],
         amounts[i],
         0,
+        true,
         tokenAddresses[i],
         IERC20(tokenAddresses[i])
       );
@@ -81,6 +82,7 @@ contract PresaleContract is Ownable {
     return presales[presaleID];
   }
 
+  // use eth to buy erc20
   function buy(uint256 presaleID, uint256 amountMantissa) public payable {
     Presale memory p = getPresale(presaleID);
     require(p.alive, "presale ended");
@@ -117,10 +119,17 @@ contract PresaleContract is Ownable {
 
     // Create liquitity if we actually sold anything
     if (p.soldMantissa > 0) {
+      // Some ETH
+      // Missing ERC20 (smart contract -> buyers)
+      // (presale owner > smart contract ... approved)
       p.token.transferFrom(p.userAddress, address(this), p.soldMantissa);
+
+      // ETH : ERC20 ... ratio thats starting price...
       uint256 totalETHMantissa = p.price * p.soldMantissa;
       uint256 fee = (totalETHMantissa * feeBasisPoints) / 10000;
 
+      // totalETHMantissa 0.0000000000002 * 2 = 0.00000000004
+      // fee = 0.00000000004 * 300 / 10000 = 0.0000000000015
       uint256 liquitiyETH = totalETHMantissa - fee;
 
       p.token.approve(address(router), p.soldMantissa);
@@ -129,7 +138,7 @@ contract PresaleContract is Ownable {
         p.soldMantissa,
         p.soldMantissa,
         liquitiyETH,
-        p.userAddress,
+        address(this),
         block.timestamp + 60 * 60
       );
 
@@ -139,6 +148,7 @@ contract PresaleContract is Ownable {
   }
 
   function changeFee(uint256 newFewBasisPoints) public onlyOwner {
+    require(newFewBasisPoints < 1000, "cannot take all the eth dummy");
     feeBasisPoints = newFewBasisPoints;
   }
 }
