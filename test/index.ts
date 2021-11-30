@@ -396,4 +396,249 @@ describe("PresaleContract", () => {
       ethers.utils.parseEther("1.96")
     );
   });
+
+  it("should not let anyone end presale twice", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.mint(ethers.utils.parseEther("24"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await presaleContract.connect(addr1).endPresale(0);
+
+    await expect(
+      presaleContract.connect(addr1).endPresale(0)
+    ).to.be.revertedWith("presale not alive");
+  });
+
+  it("should not let anyone end presale before end ", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    const block = await ethers.provider.getBlockNumber();
+    const { timestamp } = await ethers.provider.getBlock(block);
+
+    FOK.mint(ethers.utils.parseEther("24"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
+
+    const starts = [0];
+    const ends = [timestamp + 3600];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await expect(
+      presaleContract.connect(addr1).endPresale(0)
+    ).to.be.revertedWith("presale not ended");
+  });
+
+  it("should not let anyone buy from an ended presale", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    const block = await ethers.provider.getBlockNumber();
+    const { timestamp } = await ethers.provider.getBlock(block);
+
+    FOK.mint(ethers.utils.parseEther("24"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("24"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await presaleContract.connect(addr1).endPresale(0);
+
+    await expect(
+      presaleContract.connect(addr1).buy(0, ethers.utils.parseEther("1"), {
+        value: ethers.utils.parseEther("2"),
+      })
+    ).to.be.revertedWith("presale ended");
+  });
+
+  it("should let presale owner withdraw from ended presale", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1, addr2] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.connect(addr1).mint(ethers.utils.parseEther("24"));
+    FOK.connect(addr1).approve(
+      presaleContract.address,
+      ethers.utils.parseEther("24")
+    );
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract
+      .connect(addr1)
+      .startPresale(starts, ends, prices, amounts, tokenAddresses);
+    await presaleContract.connect(addr2).endPresale(0);
+    await presaleContract.connect(addr1).withdraw(0);
+
+    expect(await FOK.balanceOf(addr1.address)).to.be.equal(
+      ethers.utils.parseEther("24")
+    );
+    expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("0")
+    );
+  });
+
+  it("should not let anyone withdraw from ended presale", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1, addr2] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.connect(addr1).mint(ethers.utils.parseEther("24"));
+    FOK.connect(addr1).approve(
+      presaleContract.address,
+      ethers.utils.parseEther("24")
+    );
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract
+      .connect(addr1)
+      .startPresale(starts, ends, prices, amounts, tokenAddresses);
+    await presaleContract.connect(addr2).endPresale(0);
+    await expect(
+      presaleContract.connect(addr2).withdraw(0)
+    ).to.reverted.revertedWith("not presale owner");
+  });
+
+  it("should not let anyone withdraw from alive presale", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1, addr2] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.connect(addr1).mint(ethers.utils.parseEther("24"));
+    FOK.connect(addr1).approve(
+      presaleContract.address,
+      ethers.utils.parseEther("24")
+    );
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract
+      .connect(addr1)
+      .startPresale(starts, ends, prices, amounts, tokenAddresses);
+    await expect(
+      presaleContract.connect(addr1).withdraw(0)
+    ).to.reverted.revertedWith("presale alive");
+  });
+
+  it("should let owner adjust fee", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+    const provider = ethers.provider;
+
+    FOK.mint(ethers.utils.parseEther("25"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("25"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await presaleContract.changeFee(300);
+    await presaleContract.connect(addr1).buy(0, ethers.utils.parseEther("1"), {
+      value: ethers.utils.parseEther("2"),
+    });
+    await presaleContract.endPresale(0);
+
+    const presale = await presaleContract.getPresale(0);
+    expect(presale.alive).to.be.equal(false);
+
+    expect(await MLP.balanceOf(addr1.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(addr1.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
+
+    expect(
+      await MLP.balanceOf(owner.address),
+      "owner should have some LP"
+    ).to.be.equal(ethers.utils.parseEther("1"));
+    expect(await FOK.balanceOf(owner.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(presaleContract.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(presaleContract.address)).to.be.equal(
+      ethers.utils.parseEther("23")
+    );
+    expect(await provider.getBalance(presaleContract.address)).to.be.equal(0);
+
+    expect(await MLP.balanceOf(mockRouter.address)).to.be.equal(0);
+    expect(await FOK.balanceOf(mockRouter.address)).to.be.equal(
+      ethers.utils.parseEther("1")
+    );
+    expect(await provider.getBalance(mockRouter.address)).to.be.equal(
+      ethers.utils.parseEther("1.94")
+    );
+  });
+
+  it("should not let anyone adjust fee", async () => {
+    const { presaleContract, FOK, mockRouter, MLP } = await deployContracts();
+    const [owner, addr1] = await ethers.getSigners();
+
+    FOK.mint(ethers.utils.parseEther("25"));
+    FOK.approve(presaleContract.address, ethers.utils.parseEther("25"));
+
+    const starts = [0];
+    const ends = [1];
+    const prices = [2];
+    const amounts = [ethers.utils.parseEther("24")];
+    const tokenAddresses = [FOK.address];
+    await presaleContract.startPresale(
+      starts,
+      ends,
+      prices,
+      amounts,
+      tokenAddresses
+    );
+    await expect(
+      presaleContract.connect(addr1).changeFee(300)
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
 });
